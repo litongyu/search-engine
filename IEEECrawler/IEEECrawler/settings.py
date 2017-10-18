@@ -17,7 +17,7 @@ NEWSPIDER_MODULE = 'IEEECrawler.spiders'
 MONGODB_SERVER = "localhost"
 MONGODB_PORT = 27017
 MONGODB_DB = "IEEEPaper"
-MONGODB_COLLECTION = "test"
+MONGODB_COLLECTION = "conference"
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'IEEECrawler (+http://www.yourdomain.com)'
