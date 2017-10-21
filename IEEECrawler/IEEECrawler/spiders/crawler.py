@@ -106,9 +106,9 @@ class IEEEPaperListSpider(scrapy.Spider): #get paper list of each conference
 		crawlCount = int(self.crawlCount)
 		print "startIndex: " + self.startIndex + "  crawlCount: " + self.crawlCount
 		if not startIndex is None and not crawlCount is None:
-			records = self.collection.find({}).skip(startIndex).limit(crawlCount)
+			records = self.collection.find({}, no_cursor_timeout=True).skip(startIndex).limit(crawlCount)
 		else:
-			records = self.collection.find({})
+			records = self.collection.find({}, no_cursor_timeout=True)
 		
 		for record in records:
 			url = record['url'] + '&pageNumber=1&rowsPerPage=' + str(self.rowsPerPage)
