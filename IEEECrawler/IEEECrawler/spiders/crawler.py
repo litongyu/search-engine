@@ -128,7 +128,7 @@ class IEEEPaperListSpider(scrapy.Spider): #get paper list of each conference
 		print response.request.url
 		pattern = r'punumber=([0-9A-Za-z]+)'
 		punumber = re.findall(pattern, response.request.url)[0]
-		record = self.collection.find_one({'url':{'$regex':'.*' + punumber + '.*'}})
+		record = self.collection.find_one({'id':punumber})
 		record['paperList'] = paperList
 		self.collection.save(record)
 
