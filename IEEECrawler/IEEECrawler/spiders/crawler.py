@@ -13,7 +13,7 @@ import traceback
 class IEEESpider(scrapy.Spider): #get conference list
 	name = 'spider_1'
 	
-	base_url = "http://ieeexplore.ieee.org/"
+	base_url = "http://ieeexplore.ieee.org"
 	
 	recordsPerPage = 500.0
 	
@@ -36,7 +36,7 @@ class IEEESpider(scrapy.Spider): #get conference list
 		self.collection = db[settings['MONGODB_COLLECTION']]
 		
 	def start_requests(self):
-		site = self.base_url + 'rest/publication?reload=true'
+		site = self.base_url + '/rest/publication?reload=true'
 		data = {'contentType':'conferences','tabId':'title','publisher':'','collection':''}
 		yield scrapy.http.Request(url=site, method="POST", headers=self.hdr, body=json.dumps(data), callback=self.parse)
 		
@@ -45,7 +45,7 @@ class IEEESpider(scrapy.Spider): #get conference list
 		print response.body
 		totalRecords = json.loads(response.text)['totalRecords']
 		pages = int(math.ceil(totalRecords / self.recordsPerPage))
-		site = self.base_url + 'rest/publication?reload=true'
+		site = self.base_url + '/rest/publication?reload=true'
 		data = {"contentType":"conferences","tabId":"title","publisher":"","collection":"","rowsPerPage":self.recordsPerPage}
 		for i in range(1, pages + 1):
 			data['pageNumber'] = i
@@ -78,7 +78,7 @@ class IEEESpider(scrapy.Spider): #get conference list
 class IEEEPaperListSpider(scrapy.Spider): #get paper list of each conference
 	name = 'spider_2'
 	
-	base_url = "http://ieeexplore.ieee.org/"
+	base_url = "http://ieeexplore.ieee.org"
 	
 	rowsPerPage = 10000
 	
@@ -135,7 +135,7 @@ class IEEEPaperListSpider(scrapy.Spider): #get paper list of each conference
 class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfUrl of each paper
 	name = 'spider_3'
 	
-	base_url = "http://ieeexplore.ieee.org/"
+	base_url = "http://ieeexplore.ieee.org"
 	
 	hdr = {
 		'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36',
@@ -146,16 +146,20 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 		'Content-Type': 'application/json;charset=UTF-8'
 	}
 	
-	def __init__(self):
+	def __init__(self, startIndex, crawlCount):
 		connection = pymongo.MongoClient(
 			settings['MONGODB_SERVER'],
 			settings['MONGODB_PORT']
 		)
 		db = connection[settings['MONGODB_DB']]
 		self.collection = db[settings['MONGODB_COLLECTION']]
+		self.startIndex = startIndex
+		self.crawlCount = crawlCount
 	
 	def start_requests(self):
-		records = self.collection.find({})
+		startIndex = int(self.startIndex)
+		crawlCount = int(self.crawlCount)
+		records = self.collection.find({}, no_cursor_timeout=True).skip(startIndex).limit(crawlCount)
 		for record in records:
 			for paper in record['paperList']:
 				yield scrapy.http.Request(url=paper['url'], headers=self.hdr, callback=self.parse)
@@ -164,7 +168,9 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 		pattern = r'global\.document\.metadata=(\{.*\});'
 		scriptsStr = json.dumps(response.xpath('//script[@type="text/javascript"]').extract())
 		metadataString = re.findall(pattern, scriptsStr)[0]
-		metadata = json.loads(re.sub(r'\\*(?=")', '', metadataString))
+		temp = re.sub(r'\\(?=")', '', metadataString)
+		temp = re.sub(r'\\\\(?=")', r'\\', temp) # process \\" in metadataString
+		metadata = json.loads(temp)
 		abstract = metadata["abstract"]
 		pdfUrl = self.base_url + metadata['pdfUrl']
 		authors = []
@@ -176,11 +182,11 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 				keywords = item['kwd']
 				break
 		articleId = metadata['articleId']
-		referenceSite = self.base_url + 'rest/document/' + articleId + '/references'
-		citationSite = self.base_url + 'rest/document/' + articleId + '/citations'
+		referenceSite = self.base_url + '/rest/document/' + articleId + '/references'
+		citationSite = self.base_url + '/rest/document/' + articleId + '/citations'
 		yield scrapy.http.Request(url=referenceSite, headers=self.hdr, callback=self.parseReferences)
 		yield scrapy.http.Request(url=citationSite, headers=self.hdr, callback=self.parseCitations)
-		record = self.collection.find_one({'paperList':{'$elemMatch':{'url':{'$regex': '.*' + articleId + '.*'}}}})
+		record = self.collection.find_one({'paperList':{'$elemMatch':{'url':{'$regex': '[^0-9]' + articleId + '[^0-9]'}}}})
 		for item in record['paperList']:
 			if articleId in item['url']:
 				item['abstract'] = abstract
@@ -207,7 +213,7 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 				if item.has_key('links') and item['links'].has_key('documentLink'):
 					temp['url'] = self.base_url + item['links']['documentLink']
 				references.append(temp)
-		record = self.collection.find_one({'paperList': {'$elemMatch': {'url': {'$regex': '.*' + data['articleNumber'] + '.*'}}}})
+		record = self.collection.find_one({'paperList': {'$elemMatch': {'url': {'$regex': '[^0-9]' + data['articleNumber'] + '[^0-9]'}}}})
 		for item in record['paperList']:
 			if data['articleNumber'] in item['url']:
 				item['references'] = references
@@ -237,7 +243,7 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 					if item.has_key('links') and item['links'].has_key('crossRefLink'):
 						temp['url'] = self.base_url + item['links']['crossRefLink']
 					citations.append(temp)
-		record = self.collection.find_one({'paperList': {'$elemMatch': {'url': {'$regex': '.*' + articleId + '.*'}}}})
+		record = self.collection.find_one({'paperList': {'$elemMatch': {'url': {'$regex': '[^0-9]' + articleId + '[^0-9]'}}}})
 		for item in record['paperList']:
 			if articleId in item['url']:
 				item['citations'] = citations
