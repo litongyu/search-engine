@@ -161,6 +161,8 @@ class IEEEPaperDetail1Spider(scrapy.Spider): #get keywords abstract authors pdfU
 		crawlCount = int(self.crawlCount)
 		records = self.collection.find({}, no_cursor_timeout=True).skip(startIndex).limit(crawlCount)
 		for record in records:
+			if not 'paperList' in record:
+				continue
 			for paper in record['paperList']:
 				yield scrapy.http.Request(url=paper['url'], headers=self.hdr, callback=self.parse)
 
